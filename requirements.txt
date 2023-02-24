@@ -1,0 +1,2 @@
+ccxt
+node-telegram-bot-api
