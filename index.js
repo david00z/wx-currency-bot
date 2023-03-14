@@ -1,153 +1,132 @@
-"use strict";
-var config = require('./config');
-const ccxt = require ('ccxt');
-const { wavesexchange } = require('ccxt');
-const we = new wavesexchange({
-    apiKey: config.API_KEY,
-    secret: config.SECRET_KEY,
+const TelegramBot = require('node-telegram-bot-api');
+const ccxt = require('ccxt');
+const qrcode = require('qrcode'); 
+const depositAddress  = '3PNAvrbLg1MAEzkUmgnKFF61CJbfV2jLPNj';
+const UrlAddressUSDT = 'https://waves.exchange/withdraw/USDT';
+const UrlAddressBTC = 'https://waves.exchange/withdraw/BTC';
+const token = '5968461940:AAF8ow-Z8usdlDC1AZZQXBiIuX5cCqrSPH8';
+const bot = new TelegramBot(token, { polling: true });
+
+// Command /start
+bot.onText(/\/start/, (msg) => {
+  bot.sendMessage(msg.chat.id, "Добро пожаловать в WX Currency Bot\nВведите /currency, чтобы получить информацию об обменном курсе BTC/USDT\nВведите /trade, чтобы получить информацию об обмене валюты");
 });
 
-const TelegramApi = require('node-telegram-bot-api')
-
-
-const token = config.TELEGRRAM_TOKEN
-
-const bot = new TelegramApi(token, {polling: true})
-
-const chats = {}
-
-const currencyOptions = {
-    reply_markup: JSON.stringify({
-        inline_keyboard: [
-            [{text: 'Получить', callback_data: 'get_BTCUSDT'}],
-        ]
-    })
-}
-const tradeOptions = {
-    reply_markup: JSON.stringify({
-        inline_keyboard: [
-            [{text: 'Обменять BTC на USDT', callback_data: 'trade_BTCUSDT'},{text: 'Обменять WAVES на BTC', callback_data: 'trade_WAVESBTC'}],
-        ]
-    })
-}
-
-const startCurrency = async (chatId) => {
-    await bot.sendMessage(chatId, 'Добро пожаловать в WX Currency Bot \nВведите /currency, чтобы получить информацию о курсе BTC/USDT \nВведите /trade, чтобы получить информацию об обмене валют');
-}
-const smallCurrency = async (chatId) => {
-    await bot.sendMessage(chatId, 'Что получить курс BTC/USDT нажми кнопку "Получить"',currencyOptions);
-}
-const startTrade = async (chatId) => {
-    await bot.sendMessage(chatId, 'Для обмена BTC на USDT или WAVES на BTC, нажмите на соответствующую кнопку',tradeOptions);
-}
-const currencyFT = async (chatId) => {
-    (async () => {
-        await we.loadMarkets();
-        const exchanges = [
-            'wavesexchange',
-        ]
-    
-        const symbol = 'BTC/USDT'
-        const tickers = {}
-    
-        await Promise.all (exchanges.map (exchangeId =>
-    
-            new Promise (async (resolve, reject) => {
-    
-                const exchange = new ccxt[exchangeId] ()
-    
-                
-    
-                    const ticker = await exchange.fetchTicker (symbol)
-                    tickers[exchangeId] = ticker
-    
-                    Object.keys (tickers).map (exchangeId => {
-                        const ticker = tickers[exchangeId]
-                        console.log (ticker['datetime'], exchangeId, ticker['last'], ticker['ask'])   
-                        bot.sendMessage(chatId, 'Текущий курс '+ symbol + ' : ' + ticker['last'] + '$')
-                    })
-                
-    
-            })
-    
-        ))
-    
-    }) ()
-}
-
-const BuyOrderUSDTBTC = async (chatId) => {
-    const symbol = 'BTC/USDT';
-    const amount = 1; // количество, которое вы хотите купить
-    const price = 20000; // цена, по которой вы хотите купить
-
-    we.createLimitBuyOrder(symbol, amount, price).then(order => {
-        console.log(order);
-    }).catch(error => {
-        console.log('Ошибка при создании ордера:', error);
-        bot.sendMessage(chatId, 'У вас недостаточно средств ни для одной из приемлемых комиссий за активы')
-    });
-}
-
-const BuyOrderBTCWAVES = async (chatId) => {
-    const symbol = 'WAVES/BTC'; // Wavesexchange торговой пары USDT/BTC не имеет
-    const amount = 26300; // количество, которое вы хотите купить
-    const price = 1; // цена, по которой вы хотите купить
-
-    we.createLimitBuyOrder(symbol, amount, price).then(order => {
-        console.log(order);
-    }).catch(error => {
-        console.log('Ошибка при создании ордера:', error);
-        bot.sendMessage(chatId, 'У вас недостаточно средств ни для одной из приемлемых комиссий за активы')
-    });
-}
-
-const Razrab = async (chatId) => {
-        bot.sendMessage(chatId, 'В разработке 🕒')
-}
-const start = async () => {
-
-    
-
-    bot.setMyCommands([
-        {command: '/start', description: 'Начальное приветствие'},
-        {command: '/currency', description: 'Информация о курсе валют'},
-        {command: '/trade', description: 'Информация об обмене валюты'},
-    ])
-
-    bot.on('message', async msg => {
-        const text = msg.text;
-        const chatId = msg.chat.id;
-
-        try {
-            if (text === '/start') {
-                return startCurrency(chatId);
-            }
-            if (text === '/currency') {
-                return smallCurrency(chatId);
-            }
-            if (text === '/trade') {
-                return startTrade(chatId);
-            }
-            return bot.sendMessage(chatId, 'Я тебя не понимаю, попробуй еще раз!)');
-        } catch (e) {
-            return bot.sendMessage(chatId, 'Произошла какая то ошибочка!)');
+// Command /currency
+bot.onText(/\/currency/, (msg) => {
+  bot.sendMessage(msg.chat.id, "Чтобы узнать курс обмена BTC/USDT, нажмите кнопку «Получить».", {
+    reply_markup: {
+      inline_keyboard: [[
+        {
+          text: "Получить",
+          callback_data: "get_exchange_rate"
         }
+      ]]
+    }
+  });
+});
 
-    })
+// Command /trade
+bot.onText(/\/trade/, (msg) => {
+  bot.sendMessage(msg.chat.id, "Для обмена валюты нажмите соответствующую кнопку", {
+    reply_markup: {
+      inline_keyboard: [[
+        {
+          text: "Обмен USDT/BTC",
+          callback_data: "exchange_usdt_btc"
+        },
+        {
+          text: "Обмен BTC/USDT",
+          callback_data: "exchange_btc_usdt"
+        }
+      ]]
+    }
+  });
+});
 
-    bot.on('callback_query', msg => {
-        const data = msg.data;
-        const chatId = msg.message.chat.id;
-        if (data === 'get_BTCUSDT') {
-            return currencyFT(chatId);
-        }
-        if (data === 'trade_BTCUSDT') {
-            return BuyOrderUSDTBTC(chatId);
-        }
-        if (data === 'trade_WAVESBTC') {
-            return BuyOrderBTCWAVES(chatId);
-        }
-    })
-}
 
-start()
+  bot.on('callback_query', async (callbackQuery) => {
+    const message = callbackQuery.message;
+    const data = callbackQuery.data;
+    const [action, baseCurrency, quoteCurrency, amount] = data.split('_');
+    const chatId = callbackQuery.message.chat.id;
+    const qrCodeDataURLUSDT = `https://api.qrserver.com/v1/create-qr-code/?data=${UrlAddressUSDT}&size=200x200`;
+    const qrCodeDataURLBTC = `https://api.qrserver.com/v1/create-qr-code/?data=${UrlAddressBTC}&size=200x200`;
+    const messageTextUSDT = `Оплата на бирже Waves.Exchange по qr-коду\n\nОплата на бирже Waves.Exchange по ссылке: ${UrlAddressUSDT}\n\nАдрес кошелька для депозита USDT на бирже Waves.Exchange: ${depositAddress}`;
+    const messageTextBTC = `Оплата на бирже Waves.Exchange по qr-коду\n\nОплата на бирже Waves.Exchange по ссылке: ${UrlAddressBTC}\n\nАдрес кошелька для депозита BTC на бирже Waves.Exchange: ${depositAddress}`;
+  
+    if (data === "get_exchange_rate") {
+      const exchange = new ccxt.wavesexchange();
+      const ticker = await exchange.fetchTicker('BTC/USDT');
+      const exchangeRate = ticker.last;
+      bot.sendMessage(chatId, `Текущий курс обмена BTC/USDT составляет ${exchangeRate}`);
+    }
+    
+    if (data.startsWith("buy_usdt_btc_")) {
+      bot.sendPhoto(chatId, qrCodeDataURLUSDT, { caption: messageTextUSDT });
+    }
+    
+    if (data.startsWith("buy_btc_usdt_")) {
+      bot.sendPhoto(chatId, qrCodeDataURLBTC, { caption: messageTextBTC });
+    }
+    
+    if (data === "exchange_usdt_btc") {
+      bot.sendMessage(chatId, "Введите сумму USDT, которую вы хотите обменять на BTC");
+      bot.once('message', async (replyMessage) => {
+        const usdtAmount = parseFloat(replyMessage.text);
+        const exchange = new ccxt.wavesexchange();
+        const ticker = await exchange.fetchTicker('BTC/USDT');
+        const exchangeRate = ticker.last;
+        const btcAmount = usdtAmount / exchangeRate;
+        bot.sendMessage(chatId, `Текущий курс обмена <b>BTC/USDT</b> составляет: ${exchangeRate}\n\nВы получите ${btcAmount} BTC\n\nЧтобы купить, нажмите кнопку «Купить» или нажмите кнопку «Отмена», чтобы отменить`, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[
+              {
+                text: "✅ Купить",
+                callback_data: `buy_usdt_btc_${btcAmount}`
+              },
+              {
+                text: "❌ Отменить",
+                callback_data: "cancel_exchange"
+              }
+            ]]
+          }
+        });
+      });
+    }
+  
+    if (data === "exchange_btc_usdt") {
+      bot.sendMessage(chatId, "Введите сумму BTC, которую вы хотите обменять на USDT");
+      bot.once('message', async (replyMessage) => {
+        console.log('Reply received');
+        const btcAmount = parseFloat(replyMessage.text);
+        const exchange = new ccxt.wavesexchange();
+        const ticker = await exchange.fetchTicker('BTC/USDT');
+        const exchangeRate = ticker.last;
+        const usdtAmount = btcAmount * exchangeRate;
+        bot.sendMessage(chatId, `Текущий курс обмена <b>BTC/USDT</b> составляет: ${exchangeRate}\n\nВы получите ${usdtAmount} USDT\n\nЧтобы купить, нажмите кнопку «Купить» или нажмите кнопку «Отмена», чтобы отменить`, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[
+              {
+                text: "✅ Купить",
+                callback_data: `buy_btc_usdt_${usdtAmount}`
+              },
+              {
+                text: "❌ Отменить",
+                callback_data: "cancel_exchange"
+              }
+            ]]
+          }
+        });
+      });
+    }
+    if (action === "cancel") {
+      bot.answerCallbackQuery(callbackQuery.id, { text: 'Вы отменили операцию', showAlert: false });
+      const messageId = callbackQuery.message.message_id;
+      const responseMsg = "Операция отменена";
+      bot.editMessageText(responseMsg, { chat_id: chatId, message_id: messageId });
+    }
+    
+  });
